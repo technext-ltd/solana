@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Countdown to Celebration</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: black;
+      overflow: hidden;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    .countdown-container {
+      text-align: center;
+    }
+
+    #countdown {
+      font-size: 2rem;
+      margin-bottom: 20px;
+    }
+
+    .message-container {
+      display: none;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+      max-width: 600px;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .btn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 18px;
+      color: white;
+      background: crimson;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .btn:hover {
+      background: darkred;
+    }
+
+    .fireworks {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="countdown-container">
+    <p id="countdown">Loading countdown...</p>
+  </div>
+
+  <canvas class="fireworks"></canvas>
+  <div class="message-container">
+    <p id="message">Smile before you Open 😊</p>
+    <button class="btn" onclick="showNextMessage()">Click Here</button>
+  </div>
+
+  <script>
+    const countdownElement = document.getElementById("countdown");
+    const messageContainer = document.querySelector(".message-container");
+    const targetDate = new Date("2024-12-24T23:59:00+08:00").getTime();
+
+    function updateCountdown() {
+      const now = new Date().getTime();
+      const distance = targetDate - now;
+
+      if (distance <= 0) {
+        // Countdown finished
+        clearInterval(countdownInterval);
+        countdownElement.style.display = "none";
+        messageContainer.style.display = "block";
+        return;
+      }
+
+      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      countdownElement.textContent = `Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+    }
+
+    const countdownInterval = setInterval(updateCountdown, 1000);
+
+    // Message functionality
+    const messages = [
+      "Merry Christmas kapatid ko ❤️",
+      "It's been a while na Kapatid ko. Even if we don't always talk❣️",
+      "I always prayed the best for you 😊",
+      "I wish you a good health and more blessings and you will be successful In God's Will❣️🥰",
+      "It's been a while na din na di tayo nag usap 🥺",
+      "But always remember that even if I'm not there everyday besides you, the prayers always protect you ❣️",
+      "You will be successful one day 🎉",
+      "Laban lang Kapatid ko for life isn't always at ease❣️🥰",
+      "But Kapatid ko always remember that God is the Greatest ❤️",
+      "So don't give up and keep striving ☺️",
+      "I may not always here with you 🙁",
+      "But i prayed for you, and that's the greatest form of friendship can do 🫶",
+      "Once again! Merry Christmas and Happy New Year 🎉🎊🪅"
+    ];
+
+    let index = 0;
+    const messageElement = document.getElementById("message");
+
+    function showNextMessage() {
+      index++;
+      if (index < messages.length) {
+        messageElement.innerHTML = messages[index];
+      } else {
+        messageElement.innerHTML = "Merry Christmas  🎉";
+      }
+    }
+
+    // Fireworks Effect
+    const canvas = document.querySelector(".fireworks");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let particles = [];
+
+    class Particle {
+      constructor(x, y, color, size) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = size;
+        this.vx = (Math.random() - 0.5) * 4;
+        this.vy = Math.random() * -4;
+        this.alpha = 1;
+      }
+      draw() {
+        ctx.globalAlpha = this.alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.closePath();
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= 0.02;
+      }
+    }
+
+    function createFirework() {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height / 2;
+      const colors = ["#ff0", "#f00", "#0f0", "#00f", "#ff6347"];
+      const size = Math.random() * 2 + 1;
+
+      for (let i = 0; i < 50; i++) {
+        particles.push(new Particle(x, y, colors[Math.floor(Math.random() * colors.length)], size));
+      }
+    }
+
+    function animateFireworks() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles = particles.filter(p => p.alpha > 0);
+      particles.forEach(p => {
+        p.update();
+        p.draw();
+      });
+      requestAnimationFrame(animateFireworks);
+    }
+
+    setInterval(createFirework, 800);
+    animateFireworks();
+  </script>
+</body>
+</html>
