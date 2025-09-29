@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Customer Debt POS — Full</title>
+    <style>
+        :root{--primary:#2563eb;--accent:#10b981;--danger:#ef4444;--bg:#f3f4f6;--card:#fff;--muted:#6b7280}
+        *{box-sizing:border-box}
+        body{margin:0;font-family:Inter,system-ui,Roboto,Arial;background:var(--bg);color:#111827}
+        .container{max-width:1100px;margin:12px auto;padding:10px}
+        header{background:linear-gradient(90deg,var(--primary),#0ea5e9);color:#fff;padding:12px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+        h1{margin:0;font-size:1.05rem}
+        .tabs{display:flex;gap:8px;margin-top:12px}
+        .tab{background:var(--card);padding:8px;border-radius:8px;cursor:pointer;font-weight:700;flex:1;text-align:center}
+        .tab.active{box-shadow:0 6px 18px rgba(2,6,23,0.08);border:2px solid rgba(37,99,235,0.08)}
+        .card{background:var(--card);padding:12px;border-radius:10px;margin-top:12px;box-shadow:0 2px 8px rgba(0,0,0,0.03)}
+        label{display:block;font-size:0.85rem;color:var(--muted);margin-bottom:6px}
+        input,select,textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #e5e7eb;font-size:0.95rem}
+        .action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+        .btn{border:0;padding:9px 12px;border-radius:10px;font-weight:700;cursor:pointer}
+        .btn-primary{background:#eef2ff;color:var(--primary)} .btn-success{background:var(--accent);color:#fff} .btn-danger{background:var(--danger);color:#fff}
+        .small{font-size:0.85rem}
+        table{width:100%;border-collapse:collapse;margin-top:8px}
+        th,td{padding:8px;border-bottom:1px solid #f3f4f6;text-align:left}
+        .qr-scanner{padding:10px;border:2px dashed #e6e6e6;border-radius:8px;text-align:center}
+        .notification{position:fixed;right:12px;top:12px;padding:10px 12px;border-radius:8px;color:#fff;font-weight:700;z-index:999;transform:translateX(150%);transition:transform .25s}
+        .notification.show{transform:translateX(0)}
+        .notif-success{background:var(--accent)} .notif-error{background:var(--danger)}
+        @media (max-width:768px){.tabs{overflow:auto}.tab{min-width:120px}}
+    </style>
+    <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Customer Debt POS — Full</h1>
+                <div class="small">Continuous scanning, offline support, auto-login, print receipts</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+                <div id="firebase-status" class="small" style="background:rgba(255,255,255,0.12);padding:6px 8px;border-radius:999px">Connecting...</div>
+                <div id="auth-section">
+                    <button class="btn btn-primary" id="login-btn">Login</button>
+                    <button class="btn btn-success" id="signup-btn">Sign Up</button>
+                </div>
+                <div id="user-info" style="display:none;align-items:center;gap:8px">
+                    <div id="user-name" class="small"></div>
+                    <button class="btn" id="logout-btn">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <div id="main-content" style="display:none">
+            <div class="tabs">
+                <div class="tab active" data-tab="products">Products</div>
+                <div class="tab" data-tab="purchases">Purchases</div>
+                <div class="tab" data-tab="customers">Customers</div>
+            </div>
+
+            <!-- Products -->
+            <div id="products-tab" class="card tab-content">
+                <h3 class="small">Add / Edit Product</h3>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <div style="flex:1;min-width:240px">
+                        <label>Product Code (scan to auto-fill)</label>
+                        <input id="product-code" placeholder="Scan barcode to fill code"/>
+                    </div>
+                    <div style="flex:1;min-width:240px">
+                        <label>Product Name</label>
+                        <input id="product-name" placeholder="Product name"/>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+                    <div style="flex:1;min-width:180px">
+                        <label>Price</label>
+                        <input id="product-price" type="number" step="0.01" min="0" />
+                    </div>
+                    <div style="flex:1;min-width:180px">
+                        <label>Category</label>
+                        <select id="product-category"><option value="general">General</option><option value="food">Food</option><option value="clothing">Clothing</option></select>
+                    </div>
+                    <div style="min-width:140px;align-self:end">
+                        <button class="btn btn-success" id="save-product">Save Product</button>
+                    </div>
+                </div>
+
+                <div class="action-row" style="margin-top:12px">
+                    <button class="btn" id="open-products-scanner">Scan Barcode (fill code)</button>
+                    <button class="btn btn-danger" id="stop-products-scanner">Stop Scanner</button>
+                </div>
+                <div id="products-scanner" class="qr-scanner" style="display:none;margin-top:8px"><div id="products-scanner-container" style="min-height:200px"></div></div>
+
+                <h4 class="small" style="margin-top:12px">Products</h4>
+                <div style="max-height:260px;overflow:auto" id="products-list-container">
+                    <table><thead><tr><th>Code</th><th>Name</th><th>Price</th><th>Actions</th></tr></thead><tbody id="products-list"><tr><td colspan="4">No products</td></tr></tbody></table>
+                </div>
+            </div>
+
+            <!-- Purchases -->
+            <div id="purchases-tab" class="card tab-content" style="display:none">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3 class="small">Create Purchase</h3>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <label class="small">Continuous scan</label>
+                        <input type="checkbox" id="continuous-scan" />
+                        <button class="btn" id="export-purchases">Export CSV</button>
+                    </div>
+                </div>
+                <div class="card" style="margin-top:8px">
+                    <label class="small">Customer</label>
+                    <input id="purchase-customer" placeholder="Customer name"/>
+                    <div style="display:flex;gap:8px;margin-top:8px">
+                        <input id="customer-phone" placeholder="Phone (optional)" />
+                        <input id="customer-email" placeholder="Email (optional)" />
+                    </div>
+                </div>
+
+                <div style="margin-top:8px">
+                    <label class="small">Search product</label>
+                    <input id="product-search" placeholder="Search by name or code" />
+                </div>
+                <div class="action-row" style="margin-top:8px">
+                    <button class="btn" id="open-purchase-scanner">Scan Barcode (add to cart)</button>
+                    <button class="btn btn-danger" id="stop-purchase-scanner">Stop Scanner</button>
+                    <button class="btn btn-danger" id="clear-cart">Clear Cart</button>
+                    <button class="btn btn-success" id="finalize-purchase" disabled>Finalize (Save as pending)</button>
+                </div>
+                <div id="purchase-scanner" class="qr-scanner" style="display:none;margin-top:8px"><div id="purchase-scanner-container" style="min-height:200px"></div></div>
+
+                <h4 class="small" style="margin-top:12px">Cart</h4>
+                <div id="cart-items" class="card small" style="min-height:100px">Cart empty</div>
+                <div style="text-align:right;margin-top:6px">Total: $<span id="cart-total">0.00</span></div>
+
+                <h4 class="small" style="margin-top:12px">Recent Purchases</h4>
+                <div style="max-height:220px;overflow:auto" id="recent-purchases-container">
+                    <table><thead><tr><th>Date</th><th>Customer</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="recent-purchases"><tr><td colspan="5">No purchases</td></tr></tbody></table>
+                </div>
+            </div>
+
+            <!-- Customers -->
+            <div id="customers-tab" class="card tab-content" style="display:none">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3 class="small">Customers</h3>
+                    <div><button class="btn" id="export-customers">Export CSV</button></div>
+                </div>
+                <input id="customer-search" placeholder="Search customers" style="margin-top:8px" />
+                <div style="max-height:220px;overflow:auto;margin-top:8px">
+                    <table><thead><tr><th>Name</th><th>Phone</th><th>Total</th><th>Actions</th></tr></thead><tbody id="customers-list"><tr><td colspan="4">No customers</td></tr></tbody></table>
+                </div>
+
+                <div id="customer-details" style="display:none;margin-top:12px" class="card">
+                    <h4 class="small">Customer Details</h4>
+                    <div><strong>Name:</strong> <span id="detail-name"></span></div>
+                    <div><strong>Phone:</strong> <span id="detail-phone"></span></div>
+                    <div><strong>Email:</strong> <span id="detail-email"></span></div>
+                    <div><strong>Total:</strong> $<span id="detail-total"></span></div>
+                    <div style="margin-top:8px">
+                        <button class="btn btn-success" id="print-receipt">Print Receipt (selected purchase)</button>
+                    </div>
+                    <h4 class="small" style="margin-top:10px">Purchase History</h4>
+                    <div style="max-height:220px;overflow:auto"><table><thead><tr><th>Date</th><th>Products</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="customer-history"><tr><td colspan="5">No history</td></tr></tbody></table></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth modal -->
+    <div id="auth-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);align-items:center;justify-content:center">
+        <div style="background:#fff;padding:12px;border-radius:10px;max-width:420px;margin:auto">
+            <h4 class="small">Login</h4>
+            <input id="login-email" placeholder="Email" style="margin-top:8px"/>
+            <input id="login-password" placeholder="Password" type="password" style="margin-top:8px"/>
+            <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn btn-primary" id="do-login">Login & Save</button>
+                <button class="btn" id="close-auth">Close</button>
+            </div>
+            <hr/>
+            <h4 class="small">Sign Up</h4>
+            <input id="signup-name" placeholder="Business name" style="margin-top:8px"/>
+            <input id="signup-email" placeholder="Email" style="margin-top:8px"/>
+            <input id="signup-password" placeholder="Password" type="password" style="margin-top:8px"/>
+            <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn btn-success" id="do-signup">Sign Up</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBzr03ek43UYiSO5qVc1RGKLySDccgtYFE",
+        authDomain: "quantcom-68a1f.firebaseapp.com",
+        projectId: "quantcom-68a1f",
+        storageBucket: "quantcom-68a1f.firebasestorage.app",
+        messagingSenderId: "36123023094",
+        appId: "1:36123023094:web:bb62a3df2d70ca0538bed7",
+        measurementId: "G-JZHXTDHV2G"
+    };
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    document.getElementById('firebase-status').textContent = 'Connected';
+
+    // state
+    let products = [], customers = [], purchases = [], cart = [];
+    let currentUser = null;
+    let scannerRunning = false;
+
+    const notify = (msg, type='success')=>{ const el = document.getElementById('notification'); el.textContent = msg; el.className = 'notification show ' + (type==='error'?'notif-error':'notif-success'); setTimeout(()=>{ el.classList.remove('show') }, 3000); };
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); const id = t.getAttribute('data-tab'); document.querySelectorAll('.tab-content').forEach(c=> c.style.display = (c.id===id+'-tab' || c.id===id) ? '' : 'none'); }));
+
+    // CRUD and cart functions (abbreviated for brevity)
+    document.getElementById('save-product').addEventListener('click', async ()=>{
+        if(!currentUser){ notify('Login required','error'); return; }
+        const code = document.getElementById('product-code').value.trim(), name = document.getElementById('product-name').value.trim(), price = parseFloat(document.getElementById('product-price').value||0), category = document.getElementById('product-category').value;
+        if(!code||!name||isNaN(price)||price<=0){ notify('Fill fields','error'); return; }
+        try{ await addDoc(collection(db,'products'), { code,name,price,category,vendorId: currentUser.uid, createdAt:new Date().toISOString() }); notify('Saved'); document.getElementById('product-code').value=''; document.getElementById('product-name').value=''; document.getElementById('product-price').value=''; loadProducts(); cacheProductsLocal(); }catch(e){ console.error(e); notify('Error','error'); }
+    });
+
+    async function loadProducts(){ if(!currentUser) return; try{ const q = query(collection(db,'products'), where('vendorId','==',currentUser.uid)); const snap = await getDocs(q); products = []; snap.forEach(d=>products.push({id:d.id,...d.data()})); renderProducts(); cacheProductsLocal(); }catch(e){ console.error(e); loadProductsFromCache(); } }
+    function renderProducts(){ const tb = document.getElementById('products-list'); tb.innerHTML=''; if(products.length===0){ tb.innerHTML='<tr><td colspan=\"4\">No products</td></tr>'; return; } products.forEach(p=>{ const tr = document.createElement('tr'); tr.innerHTML = `<td>${p.code}</td><td>${p.name}</td><td>$${(p.price||0).toFixed(2)}</td><td><button class="btn" onclick="window.prefillProduct('${p.code}')">Use</button></td>`; tb.appendChild(tr); }); }
+    window.prefillProduct = (code)=>{ const p = products.find(x=>x.code===code); if(!p) return; document.getElementById('product-code').value=p.code; document.getElementById('product-name').value=p.name; document.getElementById('product-price').value=p.price; notify('Prefilled'); };
+
+    function addToCart(p, qty=1){ const ex=cart.find(i=>i.id===p.id); if(ex){ ex.quantity+=qty; ex.subtotal=ex.quantity*ex.price; } else cart.push({id:p.id,name:p.name,price:p.price,quantity:qty,subtotal:p.price*qty}); renderCart(); }
+    function renderCart(){ const el = document.getElementById('cart-items'); if(cart.length===0){ el.innerHTML='Cart empty'; document.getElementById('finalize-purchase').disabled=true; document.getElementById('cart-total').textContent='0.00'; return; } let html=''; let tot=0; cart.forEach((it,idx)=>{ tot+=it.subtotal; html+=`<div style="display:flex;justify-content:space-between;padding:6px;border-bottom:1px solid #f3f4f6"><div><strong>${it.name}</strong><div class="small">$${it.price.toFixed(2)}</div></div><div><input type="number" value="${it.quantity}" min="1" onchange="window.setCartQty(${idx},this.value)" style="width:60px"/><button class="btn btn-danger" onclick="window.removeCart(${idx})">Remove</button></div></div>`; }); el.innerHTML=html; document.getElementById('cart-total').textContent=tot.toFixed(2); document.getElementById('finalize-purchase').disabled = !(cart.length>0 && document.getElementById('purchase-customer').value.trim().length>0); }
+    window.setCartQty=(i,v)=>{ const q=parseInt(v)||1; cart[i].quantity=q; cart[i].subtotal=cart[i].quantity*cart[i].price; renderCart(); }
+    window.removeCart=(i)=>{ cart.splice(i,1); renderCart(); }
+    document.getElementById('clear-cart').addEventListener('click', ()=>{ cart=[]; renderCart(); });
+
+    // Purchases saving & offline queue
+    async function savePurchaseToServer(p){ try{ await addDoc(collection(db,'purchases'), p); return true; }catch(e){ console.error(e); return false; } }
+    function enqueueOfflinePurchase(p){ const q = JSON.parse(localStorage.getItem('offlinePurchases')||'[]'); q.push(p); localStorage.setItem('offlinePurchases', JSON.stringify(q)); notify('Saved offline'); }
+    async function syncOfflinePurchases(){ const q = JSON.parse(localStorage.getItem('offlinePurchases')||'[]'); if(q.length===0) return; const remaining=[]; for(const pu of q){ const ok = await savePurchaseToServer(pu); if(!ok) remaining.push(pu); } localStorage.setItem('offlinePurchases', JSON.stringify(remaining)); if(remaining.length===0) notify('Offline synced'); }
+    document.getElementById('finalize-purchase').addEventListener('click', async ()=>{
+        if(!currentUser){ notify('Login required','error'); return; }
+        const custName = document.getElementById('purchase-customer').value.trim(), phone=document.getElementById('customer-phone').value.trim(), email=document.getElementById('customer-email').value.trim();
+        if(!custName||cart.length===0){ notify('Customer and cart required','error'); return; }
+        let cust = customers.find(c=>c.name.toLowerCase()===custName.toLowerCase()); let custId=null;
+        if(!cust){ try{ const dr = await addDoc(collection(db,'customers'), { name:custName, phone, email, vendorId: currentUser.uid, totalPurchases:0, createdAt:new Date().toISOString() }); custId = dr.id; }catch(e){ console.error(e); } } else custId = cust.id;
+        const total = cart.reduce((s,i)=>s+i.subtotal,0); const purchase = { customerId:custId, customerName:custName, vendorId: currentUser.uid, products: cart, totalAmount: total, purchaseDate: new Date().toISOString(), status:'pending' };
+        if(navigator.onLine){ const ok = await savePurchaseToServer(purchase); if(ok){ notify('Saved'); cart=[]; renderCart(); loadPurchases(); loadCustomers(); } else { enqueueOfflinePurchase(purchase); cart=[]; renderCart(); } } else { enqueueOfflinePurchase(purchase); cart=[]; renderCart(); }
+    });
+
+    async function loadPurchases(){ if(!currentUser) return; try{ const q = query(collection(db,'purchases'), where('vendorId','==',currentUser.uid)); const snap = await getDocs(q); purchases=[]; snap.forEach(d=>purchases.push({id:d.id, ...d.data()})); purchases.sort((a,b)=> new Date(b.purchaseDate)-new Date(a.purchaseDate)); renderRecentPurchases(); cachePurchasesLocal(); }catch(e){ console.error(e); loadPurchasesFromCache(); } }
+    function renderRecentPurchases(){ const tb=document.getElementById('recent-purchases'); tb.innerHTML=''; if(purchases.length===0){ tb.innerHTML='<tr><td colspan=\"5\">No purchases</td></tr>'; return; } purchases.slice(0,100).forEach(p=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${new Date(p.purchaseDate).toLocaleString()}</td><td>${p.customerName}</td><td>$${(p.totalAmount||0).toFixed(2)}</td><td>${p.status||'N/A'}</td><td>${p.status==='pending'?`<button class=\"btn btn-success\" onclick=\"window.markPaid('${p.id}','${p.customerId||''}')\">Mark Paid</button>`:''}<button class="btn" onclick="window.viewPurchaseDetails('${p.id}')">View</button></td>`; tb.appendChild(tr); }); }
+
+    window.markPaid = async (id, customerId)=>{ if(!currentUser){ notify('Login required','error'); return; } try{ const pRef = doc(db,'purchases',id); await updateDoc(pRef, { status:'paid', paidDate:new Date().toISOString() }); notify('Marked paid'); loadPurchases(); if(customerId) loadCustomers(); }catch(e){ console.error(e); notify('Error','error'); } };
+    window.viewPurchaseDetails = (id)=>{ const p = purchases.find(x=>x.id===id); if(!p){ notify('Not found','error'); return; } const cust = customers.find(c=>c.id===p.customerId); if(cust) openCustomerDetails(cust.id); notify(`Purchase ${p.id} — $${(p.totalAmount||0).toFixed(2)}`); };
+
+    // Customers
+    async function loadCustomers(){ if(!currentUser) return; try{ const q = query(collection(db,'customers'), where('vendorId','==',currentUser.uid)); const snap = await getDocs(q); customers=[]; snap.forEach(d=>customers.push({id:d.id,...d.data()})); customers.sort((a,b)=> (a.name||'').localeCompare(b.name||'')); renderCustomers(); cacheCustomersLocal(); }catch(e){ console.error(e); loadCustomersFromCache(); } }
+    function renderCustomers(){ const tb=document.getElementById('customers-list'); tb.innerHTML=''; if(customers.length===0){ tb.innerHTML='<tr><td colspan=\"4\">No customers</td></tr>'; return; } customers.forEach(c=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${c.name}</td><td>${c.phone||'N/A'}</td><td>$${(c.totalPurchases||0).toFixed(2)}</td><td><button class="btn" onclick="window.openCustomerDetails('${c.id}')">View</button></td>`; tb.appendChild(tr); }); }
+    window.openCustomerDetails = (id)=> openCustomerDetails(id);
+    async function openCustomerDetails(id){ const c = customers.find(x=>x.id===id); if(!c) return; document.getElementById('detail-name').textContent = c.name; document.getElementById('detail-phone').textContent = c.phone||'N/A'; document.getElementById('detail-email').textContent = c.email||'N/A'; document.getElementById('detail-total').textContent = (c.totalPurchases||0).toFixed(2); document.getElementById('customer-details').style.display='block'; const ph = purchases.filter(p=> p.customerId===id); renderCustomerHistory(ph); }
+    function renderCustomerHistory(list){ const tb=document.getElementById('customer-history'); tb.innerHTML=''; if(!list||list.length===0){ tb.innerHTML='<tr><td colspan=\"5\">No history</td></tr>'; return; } list.forEach(p=>{ const prodText=(p.products||[]).map(x=>`${x.name} x${x.quantity}`).join('; '); const tr=document.createElement('tr'); tr.innerHTML=`<td>${new Date(p.purchaseDate).toLocaleString()}</td><td>${prodText}</td><td>$${(p.totalAmount||0).toFixed(2)}</td><td>${p.status||'N/A'}</td><td>${p.status==='pending'?`<button class=\"btn btn-success\" onclick=\"window.markPaid('${p.id}','${p.customerId||''}')\">Mark Paid</button>`:''} <button class="btn" onclick="window.printReceipt('${p.id}')">Print</button></td>`; tb.appendChild(tr); }); }
+
+    window.printReceipt = (purchaseId)=>{ const p = purchases.find(x=>x.id===purchaseId); if(!p){ notify('Not found','error'); return; } const html = `<html><head><title>Receipt</title><style>body{font-family:Arial;padding:20px}h2{margin:0}table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #ddd}</style></head><body><h2>Receipt</h2><div>Purchase ID: ${p.id}</div><div>Date: ${new Date(p.purchaseDate).toLocaleString()}</div><div>Customer: ${p.customerName}</div><h3>Items</h3><table><thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead><tbody>${ (p.products||[]).map(i=>`<tr><td>${i.name}</td><td>${i.quantity}</td><td>$${(i.price||0).toFixed(2)}</td></tr>`).join('') }</tbody></table><h3>Total: $${(p.totalAmount||0).toFixed(2)}</h3><div style="margin-top:20px">Thank you!</div></body></html>`; const w = window.open('','_blank'); w.document.open(); w.document.write(html); w.document.close(); w.print(); };
+
+    // Scanner utilities
+    function startScanner(targetEl, onDetected, continuous=false){
+        const container = document.getElementById(targetEl);
+        container.innerHTML = '<div id="scanner-preview" style="width:100%;height:240px"></div>';
+        if(typeof Quagga === 'undefined'){ notify('Scanner not loaded','error'); return; }
+        Quagga.init({ inputStream:{ type:'LiveStream', target: document.getElementById('scanner-preview'), constraints:{facingMode:'environment'} }, decoder:{ readers:["code_128_reader","ean_reader","upc_reader","code_39_reader","codabar_reader","ean_8_reader","upc_e_reader"] }, locate:true }, function(err){ if(err){ console.error(err); notify('Scanner init error','error'); return; } Quagga.start(); });
+        Quagga.onDetected(function(res){ if(res && res.codeResult && res.codeResult.code){ const code = res.codeResult.code; onDetected(code); if(!continuous || !document.getElementById('continuous-scan').checked){ stopScanner(); } } });
+    }
+    function stopScanner(){ try{ Quagga.stop(); Quagga.offDetected(); }catch(e){} }
+
+    // Product scanner: fill code then stop to allow vendor edit
+    document.getElementById('open-products-scanner').addEventListener('click', ()=>{ document.getElementById('products-scanner').style.display='block'; startScanner('products-scanner-container', (code)=>{ document.getElementById('product-code').value=code; notify('Code filled: '+code); document.getElementById('products-scanner').style.display='none'; stopScanner(); }, false); });
+    document.getElementById('stop-products-scanner').addEventListener('click', ()=>{ stopScanner(); document.getElementById('products-scanner').style.display='none'; });
+
+    // Purchase scanner: continuous adds to cart if product exists
+    document.getElementById('open-purchase-scanner').addEventListener('click', ()=>{
+        document.getElementById('purchase-scanner').style.display='block';
+        const continuous = document.getElementById('continuous-scan').checked;
+        startScanner('purchase-scanner-container', (code)=>{ const p = products.find(x=>x.code===code); if(p){ addToCart(p); notify('Added: '+p.name); } else notify('Product not found: '+code,'error'); }, continuous);
+    });
+    document.getElementById('stop-purchase-scanner').addEventListener('click', ()=>{ stopScanner(); document.getElementById('purchase-scanner').style.display='none'; });
+
+    // Search quick add
+    document.getElementById('product-search').addEventListener('input', (e)=>{ const term = e.target.value.toLowerCase(); if(!term||term.length<2) return; const found = products.filter(p=> (p.name||'').toLowerCase().includes(term) || (p.code||'').toLowerCase().includes(term)); if(found.length>0){ addToCart(found[0]); notify('Added: '+found[0].name); document.getElementById('product-search').value=''; } });
+
+    // CSV export helpers
+    function arrayToCSV(rows, keys){ const header = keys.join(','); const lines = rows.map(r=> keys.map(k=>{ let v = r[k]===undefined||r[k]===null?'':String(r[k]); if(v.includes('"')||v.includes(',')||v.includes('\n')) v = '"' + v.replace(/"/g,'""') + '"'; return v; }).join(',')); return [header].concat(lines).join('\n'); }
+    function downloadFile(name, content, mime='text/csv'){ const b=new Blob([content],{type:mime}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(u); a.remove(); },500); }
+    document.getElementById('export-customers').addEventListener('click', ()=>{ if(!currentUser){ notify('Login required','error'); return; } if(!customers.length){ notify('No customers','error'); return; } const keys=['id','name','phone','email','totalPurchases','lastPurchase','createdAt']; const rows=customers.map(c=>({ id:c.id, name:c.name, phone:c.phone||'', email:c.email||'', totalPurchases:c.totalPurchases||0, lastPurchase:c.lastPurchase||'', createdAt:c.createdAt||'' })); downloadFile('customers.csv', arrayToCSV(rows, keys)); notify('Exported'); });
+    document.getElementById('export-purchases').addEventListener('click', ()=>{ if(!currentUser){ notify('Login required','error'); return; } if(!purchases.length){ notify('No purchases','error'); return; } const keys=['id','customerName','purchaseDate','totalAmount','status','products']; const rows=purchases.map(p=>({ id:p.id, customerName:p.customerName||'', purchaseDate:p.purchaseDate||'', totalAmount:p.totalAmount||0, status:p.status||'', products:(p.products||[]).map(x=>`${x.name} x${x.quantity}`).join('; ') })); downloadFile('purchases.csv', arrayToCSV(rows, keys)); notify('Exported'); });
+
+    // Local cache functions
+    function cacheProductsLocal(){ localStorage.setItem('cache_products', JSON.stringify(products)); }
+    function cacheCustomersLocal(){ localStorage.setItem('cache_customers', JSON.stringify(customers)); }
+    function cachePurchasesLocal(){ localStorage.setItem('cache_purchases', JSON.stringify(purchases)); }
+    function loadProductsFromCache(){ const s=localStorage.getItem('cache_products'); if(s){ products=JSON.parse(s); renderProducts(); notify('Loaded products from cache'); } }
+    function loadCustomersFromCache(){ const s=localStorage.getItem('cache_customers'); if(s){ customers=JSON.parse(s); renderCustomers(); notify('Loaded customers from cache'); } }
+    function loadPurchasesFromCache(){ const s=localStorage.getItem('cache_purchases'); if(s){ purchases=JSON.parse(s); renderRecentPurchases(); notify('Loaded purchases from cache'); } }
+
+    // Auto-login
+    async function attemptAutoLogin(){ const email=localStorage.getItem('savedEmail'), pass=localStorage.getItem('savedPass'); if(email && pass && !currentUser){ try{ await signInWithEmailAndPassword(auth,email,pass); notify('Auto logged in'); }catch(e){ console.error(e); } } }
+    attemptAutoLogin();
+
+    // Auth UI
+    document.getElementById('login-btn').addEventListener('click', ()=>{ document.getElementById('auth-modal').style.display='flex'; });
+    document.getElementById('close-auth').addEventListener('click', ()=>{ document.getElementById('auth-modal').style.display='none'; });
+    document.getElementById('do-login').addEventListener('click', async ()=>{ const email=document.getElementById('login-email').value, pass=document.getElementById('login-password').value; if(!email||!pass){ notify('Enter creds','error'); return; } try{ await signInWithEmailAndPassword(auth,email,pass); localStorage.setItem('savedEmail', email); localStorage.setItem('savedPass', pass); document.getElementById('auth-modal').style.display='none'; notify('Logged in'); }catch(e){ console.error(e); notify('Login failed','error'); } });
+    document.getElementById('do-signup').addEventListener('click', async ()=>{ const name=document.getElementById('signup-name').value, email=document.getElementById('signup-email').value, pass=document.getElementById('signup-password').value; if(!name||!email||!pass){ notify('Fill fields','error'); return; } try{ const u = await createUserWithEmailAndPassword(auth,email,pass); await updateProfile(u.user, { displayName: name }); await addDoc(collection(db,'vendors'), { uid:u.user.uid, businessName:name, email, createdAt:new Date().toISOString() }); localStorage.setItem('savedEmail', email); localStorage.setItem('savedPass', pass); document.getElementById('auth-modal').style.display='none'; notify('Account created'); }catch(e){ console.error(e); notify('Sign up failed','error'); } });
+    document.getElementById('logout-btn').addEventListener('click', async ()=>{ try{ await signOut(auth); localStorage.removeItem('savedEmail'); localStorage.removeItem('savedPass'); notify('Logged out'); }catch(e){ notify('Logout failed','error'); } });
+
+    onAuthStateChanged(auth, (user)=>{ if(user){ currentUser=user; document.getElementById('auth-section').style.display='none'; document.getElementById('user-info').style.display='flex'; document.getElementById('user-name').textContent = user.displayName || user.email; document.getElementById('main-content').style.display=''; loadProducts(); loadCustomers(); loadPurchases(); syncOfflinePurchases(); } else { currentUser=null; document.getElementById('auth-section').style.display='flex'; document.getElementById('user-info').style.display='none'; document.getElementById('main-content').style.display='none'; loadProductsFromCache(); loadCustomersFromCache(); loadPurchasesFromCache(); } });
+
+    // Network events
+    window.addEventListener('online', ()=>{ notify('Online — syncing'); syncOfflinePurchases(); loadProducts(); loadCustomers(); loadPurchases(); });
+    window.addEventListener('offline', ()=>{ notify('Offline — using cache','error'); loadProductsFromCache(); loadCustomersFromCache(); loadPurchasesFromCache(); });
+
+    // initial cache load
+    loadProductsFromCache(); loadCustomersFromCache(); loadPurchasesFromCache();
+
+    </script>
+</body>
+</html>
