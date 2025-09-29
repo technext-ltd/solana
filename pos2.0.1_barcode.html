@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Customer Debt POS (Barcode)</title>
+    <style>
+        :root{
+            --primary:#2563eb;
+            --accent:#10b981;
+            --danger:#ef4444;
+            --bg:#f3f4f6;
+            --card:#ffffff;
+            --muted:#6b7280;
+        }
+        *{box-sizing:border-box}
+        body{
+            margin:0;
+            font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background:var(--bg);
+            color:#111827;
+            -webkit-font-smoothing:antialiased;
+        }
+        .container{
+            max-width:1100px;
+            margin:16px auto;
+            padding:12px;
+        }
+        header{
+            background:linear-gradient(90deg,var(--primary),#0ea5e9);
+            color:white;
+            padding:14px;
+            border-radius:12px;
+            display:flex;
+            gap:12px;
+            align-items:center;
+            justify-content:space-between;
+        }
+        h1{font-size:1.1rem;margin:0}
+        .subtitle{font-size:0.85rem;opacity:0.9}
+        .status{background:rgba(255,255,255,0.15);padding:6px 10px;border-radius:999px;font-size:0.85rem}
+        .auth-section{display:flex;gap:8px}
+        .btn{
+            border:0;padding:10px 12px;border-radius:8px;font-weight:600;cursor:pointer;
+        }
+        .btn-primary{background:var(--card);color:var(--primary)}
+        .btn-success{background:var(--accent);color:white}
+        .btn-danger{background:var(--danger);color:white}
+        .tabs{display:flex;gap:8px;margin-top:12px}
+        .tab{flex:1;background:var(--card);padding:10px;border-radius:10px;text-align:center;cursor:pointer;font-weight:600}
+        .tab.active{box-shadow:0 4px 12px rgba(2,6,23,0.08);border:2px solid rgba(37,99,235,0.08)}
+        .card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 2px 8px rgba(2,6,23,0.04);margin-top:12px}
+        .form-row{display:flex;gap:8px}
+        .form-row .form-group{flex:1}
+        label{display:block;font-size:0.85rem;margin-bottom:6px;color:var(--muted)}
+        input,select,textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #e5e7eb;font-size:0.95rem}
+        table{width:100%;border-collapse:collapse}
+        th,td{padding:8px;border-bottom:1px solid #f3f4f6;text-align:left;font-size:0.9rem}
+        th{background:#fafafa;font-weight:700;color:var(--muted)}
+        .table-container{overflow:auto}
+        .small{font-size:0.85rem}
+        .qr-scanner{padding:12px;border:2px dashed #e6e6e6;border-radius:10px;text-align:center}
+        .action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+        .notification{position:fixed;right:16px;top:16px;padding:12px 16px;border-radius:10px;color:white;font-weight:700;z-index:999;transform:translateX(150%);transition:transform .25s}
+        .notification.show{transform:translateX(0)}
+        .notif-success{background:var(--accent)}
+        .notif-error{background:var(--danger)}
+        /* mobile tweaks */
+        @media (max-width:768px){
+            .form-row{flex-direction:column}
+            header{flex-direction:column;align-items:flex-start;gap:8px}
+            .tabs{flex-direction:row;overflow:auto}
+            .tab{min-width:120px}
+            .container{padding:8px;margin:8px}
+        }
+    </style>
+    <!-- Quagga for barcode scanning -->
+    <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // We'll import firebase modules inside main script
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Customer Debt POS</h1>
+                <div class="subtitle">Organized mobile-first POS — Barcode scanner, Customers & Pay-later</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+                <div class="status" id="firebase-status">Connecting to Firebase...</div>
+                <div class="auth-section" id="auth-section">
+                    <button class="btn btn-primary" id="login-btn">Login</button>
+                    <button class="btn btn-success" id="signup-btn">Sign Up</button>
+                </div>
+                <div id="user-info" style="display:none;align-items:center;gap:10px">
+                    <div style="background:#e6f3ff;padding:8px;border-radius:999px" id="user-avatar">V</div>
+                    <div id="user-name" class="small">Vendor</div>
+                    <button class="btn btn-danger" id="logout-btn" style="margin-left:8px">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <div id="main-content" style="display:none">
+            <div class="tabs">
+                <div class="tab active" data-tab="products">Products</div>
+                <div class="tab" data-tab="purchases">Purchases</div>
+                <div class="tab" data-tab="view-customers">Customers</div>
+            </div>
+
+            <!-- PRODUCTS -->
+            <div class="card tab-content active" id="products-tab">
+                <h3 class="small">Product Management</h3>
+                <div class="form-row" style="margin-top:10px">
+                    <div class="form-group">
+                        <label>Product Code</label>
+                        <input id="product-code" placeholder="e.g. CODE123"/>
+                    </div>
+                    <div class="form-group">
+                        <label>Product Name</label>
+                        <input id="product-name" placeholder="Product name"/>
+                    </div>
+                </div>
+                <div class="form-row" style="margin-top:10px">
+                    <div class="form-group">
+                        <label>Price ($)</label>
+                        <input id="product-price" type="number" step="0.01" min="0" />
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="product-category">
+                            <option value="general">General</option>
+                            <option value="electronics">Electronics</option>
+                            <option value="clothing">Clothing</option>
+                            <option value="food">Food</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top:10px">
+                    <label>Description</label>
+                    <textarea id="product-description" rows="2"></textarea>
+                </div>
+
+                <div class="action-row">
+                    <button class="btn btn-success" id="add-product">Add Product</button>
+                    <button class="btn btn-primary" id="generate-qr">Show Data</button>
+                    <button class="btn" id="open-barcode-products" style="background:#fde68a">Scan Barcode</button>
+                </div>
+
+                <div id="products-scanner" class="qr-scanner" style="display:none;margin-top:12px">
+                    <div id="products-scanner-container" style="min-height:200px"></div>
+                    <div class="action-row" style="justify-content:center;margin-top:8px">
+                        <button class="btn btn-danger" id="stop-barcode-products">Stop</button>
+                    </div>
+                </div>
+
+                <div style="margin-top:12px">
+                    <h4 class="small">Product List</h4>
+                    <div class="table-container card" style="padding:8px">
+                        <table id="products-table">
+                            <thead><tr><th>Code</th><th>Name</th><th>Price</th><th>Category</th><th>Actions</th></tr></thead>
+                            <tbody id="products-list"><tr><td colspan="5" class="small">No products</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PURCHASES -->
+            <div class="card tab-content" id="purchases-tab" style="display:none">
+                <h3 class="small">Create Purchase</h3>
+                <div class="card" style="margin-top:10px">
+                    <label class="small">Customer</label>
+                    <div class="form-row">
+                        <div>
+                            <input id="purchase-customer" placeholder="Customer name" />
+                            <div id="customer-suggestions" style="display:none;background:#fff;padding:6px;border-radius:8px;position:relative;z-index:10"></div>
+                        </div>
+                        <div style="min-width:140px">
+                            <input id="customer-phone" placeholder="Phone (optional)" />
+                        </div>
+                    </div>
+                    <div style="margin-top:8px">
+                        <input id="customer-email" placeholder="Email (optional)"/>
+                    </div>
+                </div>
+
+                <div style="margin-top:10px">
+                    <label class="small">Search product</label>
+                    <input id="product-search" placeholder="Search by name or code"/>
+                    <div id="product-suggestions" style="display:none;background:#fff;padding:6px;border-radius:8px;position:relative;z-index:10"></div>
+                </div>
+
+                <div class="action-row" style="margin-top:10px">
+                    <button class="btn btn-primary" id="scan-barcode">Scan Barcode (Add)</button>
+                    <button class="btn btn-danger" id="clear-cart">Clear Cart</button>
+                    <button class="btn btn-success" id="finalize-purchase" disabled>Finalize</button>
+                </div>
+
+                <div id="purchase-scanner" class="qr-scanner" style="display:none;margin-top:12px">
+                    <div id="purchase-scanner-container" style="min-height:200px"></div>
+                    <div style="margin-top:8px;text-align:center">
+                        <button class="btn btn-danger" id="stop-purchase-scanner">Stop</button>
+                    </div>
+                </div>
+
+                <div style="margin-top:12px">
+                    <h4 class="small">Cart</h4>
+                    <div id="cart-items" class="card small" style="min-height:80px">Your cart is empty.</div>
+                    <div style="text-align:right;margin-top:8px" id="cart-total" style="display:none">Total: $<span id="total-amount">0.00</span></div>
+                </div>
+            </div>
+
+            <!-- CUSTOMERS -->
+            <div class="card tab-content" id="view-customers-tab" style="display:none">
+                <h3 class="small">Customers</h3>
+                <div style="margin-top:8px">
+                    <input id="customer-search" placeholder="Search customers"/>
+                </div>
+                <div class="table-container card" style="margin-top:8px;padding:8px">
+                    <table>
+                        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Total Purchases</th><th>Last Purchase</th><th>Actions</th></tr></thead>
+                        <tbody id="all-customers-list"><tr><td colspan="6" class="small">No customers</td></tr></tbody>
+                    </table>
+                </div>
+
+                <div id="customer-details" style="display:none;margin-top:12px" class="card">
+                    <h4 class="small">Customer Details</h4>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap">
+                        <div><strong>Name:</strong> <span id="detail-customer-name"></span></div>
+                        <div><strong>Phone:</strong> <span id="detail-customer-phone"></span></div>
+                        <div><strong>Email:</strong> <span id="detail-customer-email"></span></div>
+                        <div><strong>Total:</strong> $<span id="detail-customer-total"></span></div>
+                    </div>
+
+                    <h4 class="small" style="margin-top:12px">Purchase History</h4>
+                    <div class="table-container" style="margin-top:6px">
+                        <table>
+                            <thead><tr><th>Date</th><th>Products</th><th>Total</th><th>Status</th></tr></thead>
+                            <tbody id="purchase-history-list"><tr><td colspan="4" class="small">No history</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth modal simplified -->
+    <div id="auth-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);align-items:center;justify-content:center">
+        <div style="background:#fff;padding:12px;border-radius:10px;max-width:380px;margin:auto">
+            <h4 class="small">Vendor Login</h4>
+            <input id="login-email" placeholder="Email" style="margin-top:8px"/>
+            <input id="login-password" placeholder="Password" type="password" style="margin-top:8px"/>
+            <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn btn-primary" id="do-login">Login</button>
+                <button class="btn" id="close-auth">Close</button>
+            </div>
+            <hr/>
+            <h4 class="small">Sign Up</h4>
+            <input id="signup-name" placeholder="Business name" style="margin-top:8px"/>
+            <input id="signup-email" placeholder="Email" style="margin-top:8px"/>
+            <input id="signup-password" placeholder="Password" type="password" style="margin-top:8px"/>
+            <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn btn-success" id="do-signup">Sign Up</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBzr03ek43UYiSO5qVc1RGKLySDccgtYFE",
+        authDomain: "quantcom-68a1f.firebaseapp.com",
+        projectId: "quantcom-68a1f",
+        storageBucket: "quantcom-68a1f.firebasestorage.app",
+        messagingSenderId: "36123023094",
+        appId: "1:36123023094:web:bb62a3df2d70ca0538bed7",
+        measurementId: "G-JZHXTDHV2G"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    document.getElementById('firebase-status').textContent = 'Connected to Firebase';
+
+    // state
+    let products = [];
+    let customers = [];
+    let purchases = [];
+    let currentCart = [];
+    let selectedCustomer = null;
+    let currentUser = null;
+
+    // dom
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const notificationEl = document.getElementById('notification');
+    const authModal = document.getElementById('auth-modal');
+
+    // tab switching
+    tabs.forEach(tab=>{
+        tab.addEventListener('click', ()=>{
+            tabs.forEach(t=>t.classList.remove('active'));
+            tab.classList.add('active');
+            const id = tab.getAttribute('data-tab');
+            tabContents.forEach(content=>{
+                if(content.id === id + '-tab') content.style.display = '';
+                else content.style.display = 'none';
+            });
+        });
+    });
+
+    function showNotification(msg, type='success'){
+        notificationEl.textContent = msg;
+        notificationEl.className = 'notification show ' + (type==='error' ? 'notif-error' : 'notif-success');
+        setTimeout(()=>{notificationEl.classList.remove('show')}, 3000);
+    }
+
+    // PRODUCT MANAGEMENT
+    document.getElementById('add-product').addEventListener('click', async ()=>{
+        if(!currentUser){ showNotification('Please login','error'); return; }
+        const code = document.getElementById('product-code').value.trim();
+        const name = document.getElementById('product-name').value.trim();
+        const price = parseFloat(document.getElementById('product-price').value || 0);
+        const category = document.getElementById('product-category').value;
+        const description = document.getElementById('product-description').value.trim();
+        if(!code || !name || isNaN(price) || price<=0){ showNotification('Fill required fields','error'); return; }
+        try{
+            await addDoc(collection(db,'products'), {
+                code,name,price,category,description,vendorId: currentUser.uid, createdAt: new Date().toISOString()
+            });
+            showNotification('Product added');
+            loadProducts();
+            // clear
+            document.getElementById('product-code').value='';document.getElementById('product-name').value='';document.getElementById('product-price').value='';
+        }catch(e){ console.error(e); showNotification('Error adding product','error'); }
+    });
+
+    async function loadProducts(){
+        if(!currentUser) return;
+        try{
+            const q = query(collection(db,'products'), where('vendorId','==',currentUser.uid));
+            const snap = await getDocs(q);
+            products = [];
+            snap.forEach(d=>products.push({id:d.id, ...d.data()}));
+            renderProducts();
+        }catch(e){ console.error(e); }
+    }
+
+    function renderProducts(){
+        const tbody = document.getElementById('products-list');
+        tbody.innerHTML='';
+        if(products.length===0){ tbody.innerHTML='<tr><td colspan="5" class="small">No products</td></tr>'; return; }
+        products.forEach(p=>{
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${p.code}</td><td>${p.name}</td><td>$${p.price.toFixed(2)}</td><td>${p.category}</td>
+                <td>
+                    <button class="btn btn-primary" onclick="window.showProductData('${p.id}')">Show</button>
+                    <button class="btn btn-danger" onclick="window.deleteProduct('${p.id}')">Delete</button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    window.showProductData = (id)=>{
+        const p = products.find(x=>x.id===id);
+        if(!p) return;
+        showNotification(JSON.stringify({code:p.code,name:p.name,price:p.price}));
+    };
+
+    window.deleteProduct = async (id)=>{
+        if(!currentUser){ showNotification('Login required','error'); return; }
+        if(!confirm('Delete product?')) return;
+        try{
+            await deleteDoc(doc(db,'products',id));
+            showNotification('Deleted');
+            loadProducts();
+        }catch(e){ console.error(e); showNotification('Error deleting','error'); }
+    };
+
+    // CART MANAGEMENT
+    function addToCart(product, qty=1){
+        const existing = currentCart.find(i=>i.id===product.id);
+        if(existing){ existing.quantity += qty; existing.subtotal = existing.quantity * existing.price; }
+        else currentCart.push({id:product.id,code:product.code,name:product.name,price:product.price,quantity:qty,subtotal:product.price*qty});
+        renderCart();
+    }
+    function renderCart(){
+        const el = document.getElementById('cart-items');
+        if(currentCart.length===0){ el.innerHTML='Your cart is empty.'; document.getElementById('finalize-purchase').disabled=true; document.getElementById('total-amount').textContent='0.00'; return; }
+        let html='';
+        let total=0;
+        currentCart.forEach((it,idx)=>{
+            total += it.subtotal;
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #f3f4f6">
+                <div><strong>${it.name}</strong><div class="small">${it.code}</div></div>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <button class="btn" onclick="window.changeQty(${idx},-1)">-</button>
+                    <input type="number" value="${it.quantity}" min="1" style="width:60px;padding:6px;border-radius:8px;border:1px solid #e5e7eb" onchange="window.setQty(${idx},this.value)"/>
+                    <div><strong>$${it.subtotal.toFixed(2)}</strong></div>
+                    <button class="btn btn-danger" onclick="window.removeFromCart(${idx})">Remove</button>
+                </div></div>`;
+        });
+        el.innerHTML = html;
+        document.getElementById('total-amount').textContent = total.toFixed(2);
+        document.getElementById('finalize-purchase').disabled = !(currentCart.length>0 && document.getElementById('purchase-customer').value.trim().length>0);
+    }
+    window.changeQty = (i,delta)=>{ const it=currentCart[i]; it.quantity+=delta; if(it.quantity<1) currentCart.splice(i,1); else it.subtotal=it.quantity*it.price; renderCart(); }
+    window.setQty = (i,val)=>{ const q=parseInt(val)||1; currentCart[i].quantity=q; currentCart[i].subtotal=currentCart[i].quantity*currentCart[i].price; renderCart(); }
+    window.removeFromCart = (i)=>{ currentCart.splice(i,1); renderCart(); }
+
+    document.getElementById('clear-cart').addEventListener('click', ()=>{ currentCart=[]; renderCart(); });
+
+    // PURCHASES
+    document.getElementById('finalize-purchase').addEventListener('click', async ()=>{
+        if(!currentUser){ showNotification('Login required','error'); return; }
+        const customerName = document.getElementById('purchase-customer').value.trim();
+        const phone = document.getElementById('customer-phone').value.trim();
+        const email = document.getElementById('customer-email').value.trim();
+        if(!customerName || currentCart.length===0){ showNotification('Provide customer and cart','error'); return; }
+        try{
+            let customer = customers.find(c=>c.name.toLowerCase()===customerName.toLowerCase());
+            let customerId;
+            if(customer){ customerId = customer.id; }
+            else{
+                const docRef = await addDoc(collection(db,'customers'), { name: customerName, phone, email, vendorId: currentUser.uid, totalPurchases:0, createdAt:new Date().toISOString() });
+                customerId = docRef.id;
+                customer = { id: customerId, name: customerName, phone, email, totalPurchases:0 };
+                customers.push(customer);
+            }
+            const total = currentCart.reduce((s,i)=>s+i.subtotal,0);
+            // By default we set status 'pending' to indicate pay-later; you may change to 'paid' for immediate payment
+            const purchaseData = { customerId, customerName, vendorId: currentUser.uid, products: currentCart, totalAmount: total, purchaseDate: new Date().toISOString(), status: 'pending' };
+            await addDoc(collection(db,'purchases'), purchaseData);
+            // update customer totals & lastPurchase
+            const custRef = doc(db,'customers',customerId);
+            await updateDoc(custRef, { totalPurchases: (customer.totalPurchases||0) + total, lastPurchase: new Date().toISOString() });
+            showNotification('Purchase saved');
+            // reset
+            currentCart=[]; renderCart();
+            document.getElementById('purchase-customer').value=''; document.getElementById('customer-phone').value=''; document.getElementById('customer-email').value='';
+            loadCustomers(); loadPurchases();
+        }catch(e){ console.error(e); showNotification('Error saving purchase','error'); }
+    });
+
+    async function loadPurchases(){
+        if(!currentUser) return;
+        try{
+            const q = query(collection(db,'purchases'), where('vendorId','==',currentUser.uid));
+            const snap = await getDocs(q);
+            purchases = [];
+            snap.forEach(d=>purchases.push({id:d.id, ...d.data()}));
+            updateVendorStats();
+        }catch(e){ console.error(e); }
+    }
+
+    function updateVendorStats(){
+        document.getElementById('total-amount'); // total shown in other place
+    }
+
+    // CUSTOMERS
+    async function loadCustomers(){
+        if(!currentUser) return;
+        try{
+            const q = query(collection(db,'customers'), where('vendorId','==',currentUser.uid));
+            const snap = await getDocs(q);
+            customers = [];
+            snap.forEach(d=>customers.push({id:d.id, ...d.data()}));
+            renderAllCustomers();
+        }catch(e){ console.error(e); }
+    }
+
+    document.getElementById('customer-search').addEventListener('input', (e)=>{ renderAllCustomers(e.target.value.trim().toLowerCase()); });
+
+    function renderAllCustomers(searchTerm=''){
+        const tbody = document.getElementById('all-customers-list');
+        tbody.innerHTML='';
+        let filtered = customers;
+        if(searchTerm) filtered = customers.filter(c=> (c.name && c.name.toLowerCase().includes(searchTerm)) || (c.phone && c.phone.toLowerCase().includes(searchTerm)) || (c.email && c.email.toLowerCase().includes(searchTerm)));
+        if(filtered.length===0){ tbody.innerHTML='<tr><td colspan="6" class="small">No customers</td></tr>'; return; }
+        filtered.forEach(c=>{
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${c.name}</td><td>${c.phone||'N/A'}</td><td>${c.email||'N/A'}</td><td>$${(c.totalPurchases||0).toFixed(2)}</td><td>${c.lastPurchase? new Date(c.lastPurchase).toLocaleDateString() : 'N/A'}</td>
+                <td><button class="btn btn-primary" onclick="window.viewCustomerDetails('${c.id}')">View</button></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    window.viewCustomerDetails = async (customerId)=>{
+        const c = customers.find(x=>x.id===customerId);
+        if(!c) return;
+        document.getElementById('detail-customer-name').textContent = c.name;
+        document.getElementById('detail-customer-phone').textContent = c.phone||'N/A';
+        document.getElementById('detail-customer-email').textContent = c.email||'N/A';
+        document.getElementById('detail-customer-total').textContent = (c.totalPurchases||0).toFixed(2);
+        // load purchase history for this customer for this vendor, newest first
+        try{
+            // Keep vendor filter for safety
+            const q = query(collection(db,'purchases'), where('customerId','==',customerId), where('vendorId','==',currentUser.uid));
+            const snap = await getDocs(q);
+            const ph = [];
+            snap.forEach(d=>ph.push({id:d.id, ...d.data()}));
+            // sort by purchaseDate desc (client-side to avoid index issues)
+            ph.sort((a,b)=> new Date(b.purchaseDate) - new Date(a.purchaseDate));
+            renderPurchaseHistory(ph);
+        }catch(e){ console.error(e); showNotification('Error loading history','error'); }
+        document.getElementById('customer-details').style.display='';
+    };
+
+    function renderPurchaseHistory(list){
+        const tbody = document.getElementById('purchase-history-list');
+        tbody.innerHTML='';
+        if(!list || list.length===0){ tbody.innerHTML='<tr><td colspan="4" class="small">No purchase history</td></tr>'; return; }
+        list.forEach(p=>{
+            const productsText = (p.products||[]).map(x=>`${x.name} (x${x.quantity})`).join(', ');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${new Date(p.purchaseDate).toLocaleString()}</td><td>${productsText}</td><td>$${(p.totalAmount||0).toFixed(2)}</td><td>${p.status||'N/A'}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // SEARCH SUGGESTIONS for purchases
+    document.getElementById('purchase-customer').addEventListener('input',(e)=>{
+        const term = e.target.value.toLowerCase();
+        const box = document.getElementById('customer-suggestions');
+        box.innerHTML=''; if(term.length<2){ box.style.display='none'; return;}
+        const filtered = customers.filter(c=>c.name && c.name.toLowerCase().includes(term));
+        if(filtered.length===0){ box.style.display='none'; return; }
+        filtered.forEach(c=>{
+            const div = document.createElement('div');
+            div.className='small';
+            div.textContent = `${c.name} · ${c.phone||'No phone'}`;
+            div.style.padding='6px'; div.style.cursor='pointer';
+            div.onclick = ()=>{ selectCustomer(c); box.style.display='none'; };
+            box.appendChild(div);
+        });
+        box.style.display='';
+    });
+
+    function selectCustomer(c){
+        document.getElementById('purchase-customer').value = c.name;
+        document.getElementById('customer-phone').value = c.phone||'';
+        document.getElementById('customer-email').value = c.email||'';
+        selectedCustomer = c;
+        document.getElementById('finalize-purchase').disabled = !(currentCart.length>0 && document.getElementById('purchase-customer').value.trim().length>0);
+    }
+
+    // product search suggestions
+    document.getElementById('product-search').addEventListener('input',(e)=>{
+        const term = e.target.value.toLowerCase();
+        const box = document.getElementById('product-suggestions');
+        box.innerHTML=''; if(term.length<2){ box.style.display='none'; return;}
+        const filtered = products.filter(p=> (p.name && p.name.toLowerCase().includes(term)) || (p.code && p.code.toLowerCase().includes(term)) );
+        if(filtered.length===0){ box.style.display='none'; return; }
+        filtered.forEach(p=>{
+            const div = document.createElement('div'); div.className='small'; div.style.padding='6px'; div.style.cursor='pointer';
+            div.textContent = `${p.name} · $${p.price.toFixed(2)} · ${p.code}`;
+            div.onclick = ()=>{ addToCart(p); document.getElementById('product-search').value=''; box.style.display='none'; };
+            box.appendChild(div);
+        });
+        box.style.display='';
+    });
+
+    // BARCODE scanning (Quagga)
+    function startBarcodeScanner(containerId, onDetected){
+        const container = document.getElementById(containerId);
+        container.innerHTML = '<div id="scanner-preview" style="width:100%;height:220px"></div>';
+        if(typeof Quagga === 'undefined'){ showNotification('Barcode scanner library not loaded','error'); return; }
+        Quagga.init({
+            inputStream: {
+                type: "LiveStream",
+                constraints: { width: 640, height: 480, facingMode: "environment" },
+                target: document.getElementById('scanner-preview')
+            },
+            decoder: { readers: ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader","upc_e_reader","codabar_reader"] },
+            locate: true
+        }, function(err){
+            if(err){ console.error(err); showNotification('Scanner init error','error'); return; }
+            Quagga.start();
+        });
+        Quagga.onDetected(function(result){
+            if(result && result.codeResult && result.codeResult.code){
+                const code = result.codeResult.code;
+                onDetected(code);
+            }
+        });
+    }
+    function stopBarcodeScanner(){
+        try{ Quagga.stop(); Quagga.offDetected(); }catch(e){}
+    }
+
+    // Buttons to open/stop scanners (Products)
+    document.getElementById('open-barcode-products').addEventListener('click', ()=>{
+        if(!currentUser){ showNotification('Login required','error'); return; }
+        document.getElementById('products-scanner').style.display='';
+        startBarcodeScanner('products-scanner-container', (code)=>{
+            // find product by code
+            const p = products.find(x=>x.code === code || x.id === code);
+            if(p){ addToCart(p); showNotification('Added: '+p.name); } else { showNotification('Product not found for code: '+code,'error'); }
+            document.getElementById('products-scanner').style.display='none';
+            stopBarcodeScanner();
+        });
+    });
+    document.getElementById('stop-barcode-products').addEventListener('click', ()=>{
+        document.getElementById('products-scanner').style.display='none';
+        stopBarcodeScanner();
+    });
+
+    // Purchase scanner (adds to cart)
+    document.getElementById('scan-barcode').addEventListener('click', ()=>{
+        if(!currentUser){ showNotification('Login required','error'); return; }
+        document.getElementById('purchase-scanner').style.display='';
+        startBarcodeScanner('purchase-scanner-container', (code)=>{
+            const p = products.find(x=>x.code === code || x.id === code);
+            if(p){ addToCart(p); showNotification('Added: '+p.name); } else showNotification('Product not found: '+code,'error');
+            document.getElementById('purchase-scanner').style.display='none';
+            stopBarcodeScanner();
+        });
+    });
+    document.getElementById('stop-purchase-scanner').addEventListener('click', ()=>{
+        document.getElementById('purchase-scanner').style.display='none';
+        stopBarcodeScanner();
+    });
+
+    // AUTH
+    document.getElementById('login-btn').addEventListener('click', ()=>{ authModal.style.display='flex'; });
+    document.getElementById('close-auth').addEventListener('click', ()=>{ authModal.style.display='none'; });
+    document.getElementById('signup-btn').addEventListener('click', ()=>{ authModal.style.display='flex'; });
+
+    document.getElementById('do-login').addEventListener('click', async ()=>{
+        const email = document.getElementById('login-email').value, pass = document.getElementById('login-password').value;
+        if(!email||!pass){ showNotification('Enter credentials','error'); return; }
+        try{ await signInWithEmailAndPassword(auth,email,pass); showNotification('Logged in'); authModal.style.display='none'; }catch(e){ console.error(e); showNotification('Login failed','error'); }
+    });
+    document.getElementById('do-signup').addEventListener('click', async ()=>{
+        const name = document.getElementById('signup-name').value, email=document.getElementById('signup-email').value, pass=document.getElementById('signup-password').value;
+        if(!name||!email||!pass){ showNotification('Fill sign up','error'); return; }
+        try{
+            const u = await createUserWithEmailAndPassword(auth,email,pass);
+            await updateProfile(u.user, { displayName: name });
+            await addDoc(collection(db,'vendors'), { uid: u.user.uid, businessName: name, email, createdAt: new Date().toISOString() });
+            showNotification('Account created');
+            authModal.style.display='none';
+        }catch(e){ console.error(e); showNotification('Sign up failed','error'); }
+    });
+    document.getElementById('logout-btn').addEventListener('click', async ()=>{ try{ await signOut(auth); showNotification('Logged out'); }catch(e){ showNotification('Logout failed','error'); } });
+
+    onAuthStateChanged(auth, (user)=>{
+        if(user){
+            currentUser = user;
+            document.getElementById('auth-section').style.display='none';
+            document.getElementById('user-info').style.display='flex';
+            document.getElementById('user-name').textContent = user.displayName || user.email || 'Vendor';
+            document.getElementById('user-avatar').textContent = (user.displayName||'V').charAt(0).toUpperCase();
+            document.getElementById('main-content').style.display='';
+            loadProducts(); loadCustomers(); loadPurchases();
+        } else {
+            currentUser = null;
+            document.getElementById('auth-section').style.display='';
+            document.getElementById('user-info').style.display='none';
+            document.getElementById('main-content').style.display='none';
+            products = []; customers = []; purchases = []; currentCart = []; selectedCustomer = null;
+            renderProducts(); renderAllCustomers();
+        }
+    });
+
+    // Initialize small helper to keep UI responsive
+    (function init(){ /* nothing for now */ })();
+    </script>
+</body>
+</html>
